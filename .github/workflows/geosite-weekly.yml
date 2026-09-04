@@ -1,0 +1,49 @@
+name: Weekly Geosite Rebuild
+
+on:
+  schedule:
+    - cron: '0 22 * * 0'  # Linggo 6AM PH time (UTC+8)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-geosite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Fetch updated HaGeZi ads tiers
+        run: python3 build_hagezi_tiers.py
+
+      - name: Sync custom_data to data
+        run: cp custom_data/* data/
+
+      - name: Build geosite.dat
+        run: |
+          go run ./
+          mv dlc.dat output/geosite.dat
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ custom_data/ output/geosite.dat
+          git diff --staged --quiet || git commit -m "chore: weekly HaGeZi ads refresh $(date -u +%Y-%m-%d)"
+          git push
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: geosite-${{ github.run_number }}
+          files: output/geosite.dat
+          make_latest: true
