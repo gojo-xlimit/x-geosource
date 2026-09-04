@@ -1,0 +1,38 @@
+name: Monthly Upstream GeoIP Sync
+
+on:
+  schedule:
+    - cron: '0 21 1 * *'  # 1st ng buwan, 5AM PH time (UTC+8)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync-upstream-geoip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download latest upstream geoip.dat
+        run: |
+          curl -sL -o geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
+          curl -sL -o geoip.dat.sha256sum https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat.sha256sum
+          sha256sum -c geoip.dat.sha256sum
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add geoip.dat geoip.dat.sha256sum
+          git diff --staged --quiet || git commit -m "chore: monthly upstream geoip sync $(date -u +%Y-%m-%d)"
+          git push
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: geoip-upstream-${{ github.run_number }}
+          files: |
+            geoip.dat
+            geoip.dat.sha256sum
+          make_latest: false
