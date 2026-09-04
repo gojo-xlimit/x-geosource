@@ -48,12 +48,12 @@ jobs:
           unzip -o akamai.zip -d akamai-ranges/
           cat akamai-ranges/akamai_ipv4_CIDRs.txt <(echo) akamai-ranges/akamai_ipv6_CIDRs.txt > akamai-ranges/akamai.txt
 
-      - name: Fetch Azure ranges
+      - - name: Fetch Azure ranges
         working-directory: tool
         run: |
           AZURE_URL=$(curl -sIL "https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519" | grep -i "^location:" | tail -1 | awk '{print $2}' | tr -d '\r')
           curl -sL "$AZURE_URL" -o azure-servicetags.json
-          python3 -c "
+          python3 -c "import json; data=json.load(open('azure-servicetags.json')); [open('azure-ranges.txt','w').write('\n'.join(v['properties']['addressPrefixes'])+'\n') for v in data['values'] if v['id']=='AzureCloud']"
 import json
 with open('azure-servicetags.json') as f:
     data = json.load(f)
