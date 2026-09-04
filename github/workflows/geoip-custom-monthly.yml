@@ -1,0 +1,93 @@
+name: Monthly Custom GeoIP Rebuild
+
+on:
+  schedule:
+    - cron: '0 20 1 * *'  # 1st ng buwan, 4AM PH time (UTC+8)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-geoip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Clone Loyalsoldier/geoip tool
+        run: git clone --depth 1 https://github.com/Loyalsoldier/geoip.git tool
+
+      - name: Download MaxMind GeoLite2 CSVs
+        working-directory: tool
+        env:
+          MAXMIND_LICENSE_KEY: ${{ secrets.MAXMIND_LICENSE_KEY }}
+        run: |
+          mkdir -p geolite2
+          curl -sL "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country-CSV&license_key=${MAXMIND_LICENSE_KEY}&suffix=zip" -o country.zip
+          curl -sL "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-ASN-CSV&license_key=${MAXMIND_LICENSE_KEY}&suffix=zip" -o asn.zip
+          unzip -j country.zip -d geolite2/ "*.csv"
+          unzip -j asn.zip -d geolite2/ "*.csv"
+          for f in geolite2/*; do
+            case "$f" in
+              *Country-Locations-en.csv) mv "$f" geolite2/GeoLite2-Country-Locations-en.csv ;;
+              *Country-Blocks-IPv4.csv) mv "$f" geolite2/GeoLite2-Country-Blocks-IPv4.csv ;;
+              *Country-Blocks-IPv6.csv) mv "$f" geolite2/GeoLite2-Country-Blocks-IPv6.csv ;;
+              *ASN-Blocks-IPv4.csv) mv "$f" geolite2/GeoLite2-ASN-Blocks-IPv4.csv ;;
+              *ASN-Blocks-IPv6.csv) mv "$f" geolite2/GeoLite2-ASN-Blocks-IPv6.csv ;;
+            esac
+          done
+
+      - name: Fetch Akamai ranges
+        working-directory: tool
+        run: |
+          curl -sL "https://techdocs.akamai.com/property-manager/pdfs/akamai_ipv4_ipv6_CIDRs-txt.zip" -o akamai.zip
+          unzip -o akamai.zip -d akamai-ranges/
+          cat akamai-ranges/akamai_ipv4_CIDRs.txt <(echo) akamai-ranges/akamai_ipv6_CIDRs.txt > akamai-ranges/akamai.txt
+
+      - name: Fetch Azure ranges
+        working-directory: tool
+        run: |
+          AZURE_URL=$(curl -sIL "https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519" | grep -i "^location:" | tail -1 | awk '{print $2}' | tr -d '\r')
+          curl -sL "$AZURE_URL" -o azure-servicetags.json
+          python3 -c "
+import json
+with open('azure-servicetags.json') as f:
+    data = json.load(f)
+for v in data['values']:
+    if v['id'] == 'AzureCloud':
+        with open('azure-ranges.txt', 'w') as out:
+            for p in v['properties']['addressPrefixes']:
+                out.write(p + '\n')
+        break
+"
+
+      - name: Copy config and build
+        run: |
+          cp geoip/geoip-config.json tool/config.json
+          cd tool
+          go build -o geoip_bin ./
+          ./geoip_bin convert -c ./config.json
+
+      - name: Update geoip.dat
+        run: |
+          cp tool/output/geoip.dat geoip/geoip.dat
+          sha256sum geoip/geoip.dat | awk '{print $1}' > geoip/geoip.dat.sha256sum
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add geoip/geoip.dat geoip/geoip.dat.sha256sum
+          git diff --staged --quiet || git commit -m "chore: monthly custom geoip refresh $(date -u +%Y-%m-%d)"
+          git push
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: geoip-custom-${{ github.run_number }}
+          files: geoip/geoip.dat
+          make_latest: true
