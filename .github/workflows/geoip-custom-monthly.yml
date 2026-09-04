@@ -51,10 +51,11 @@ jobs:
       - name: Fetch Azure ranges
         working-directory: tool
         run: |
-          AZURE_URL=$(curl -sIL "https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519" | grep -i "^location:" | tail -1 | awk '{print $2}' | tr -d '\r')
-          curl -sL "$AZURE_URL" -o azure-servicetags.json
+          AZURE_URL=$(curl -sL --max-time 30 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519" | grep -o 'https://download\.microsoft\.com[^"]*\.json' | head -1)
+          echo "Found URL: $AZURE_URL"
+          curl -sL --max-time 30 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "$AZURE_URL" -o azure-servicetags.json
           python3 -c "import json; data=json.load(open('azure-servicetags.json')); [open('azure-ranges.txt','w').write(chr(10).join(v['properties']['addressPrefixes'])+chr(10)) for v in data['values'] if v['id']=='AzureCloud']"
-
+          
       - name: Copy config and build
         run: |
           cp geoip/geoip-config.json tool/config.json
