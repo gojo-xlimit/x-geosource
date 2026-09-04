@@ -33,14 +33,14 @@ jobs:
           unzip -j asn.zip -d geolite2/ "*.csv"
           for f in geolite2/*; do
             case "$f" in
-              *Country-Locations-en.csv) mv "$f" geolite2/GeoLite2-Country-Locations-en.csv ;;
-              *Country-Blocks-IPv4.csv) mv "$f" geolite2/GeoLite2-Country-Blocks-IPv4.csv ;;
-              *Country-Blocks-IPv6.csv) mv "$f" geolite2/GeoLite2-Country-Blocks-IPv6.csv ;;
-              *ASN-Blocks-IPv4.csv) mv "$f" geolite2/GeoLite2-ASN-Blocks-IPv4.csv ;;
-              *ASN-Blocks-IPv6.csv) mv "$f" geolite2/GeoLite2-ASN-Blocks-IPv6.csv ;;
+              *Country-Locations-en.csv) [ "$f" != "geolite2/GeoLite2-Country-Locations-en.csv" ] && mv "$f" geolite2/GeoLite2-Country-Locations-en.csv ;;
+              *Country-Blocks-IPv4.csv) [ "$f" != "geolite2/GeoLite2-Country-Blocks-IPv4.csv" ] && mv "$f" geolite2/GeoLite2-Country-Blocks-IPv4.csv ;;
+              *Country-Blocks-IPv6.csv) [ "$f" != "geolite2/GeoLite2-Country-Blocks-IPv6.csv" ] && mv "$f" geolite2/GeoLite2-Country-Blocks-IPv6.csv ;;
+              *ASN-Blocks-IPv4.csv) [ "$f" != "geolite2/GeoLite2-ASN-Blocks-IPv4.csv" ] && mv "$f" geolite2/GeoLite2-ASN-Blocks-IPv4.csv ;;
+              *ASN-Blocks-IPv6.csv) [ "$f" != "geolite2/GeoLite2-ASN-Blocks-IPv6.csv" ] && mv "$f" geolite2/GeoLite2-ASN-Blocks-IPv6.csv ;;
             esac
           done
-
+          
       - name: Fetch Akamai ranges
         working-directory: tool
         run: |
